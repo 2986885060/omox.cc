@@ -77,20 +77,37 @@ python build_glass.py
 四个文件放同一目录上传（只传 HTML 会白背景 + 回退字体）：
 
 ```
-omox_glass.html  bg.webp  fonts/*.woff2
+index.html  bg.webp  fonts/*.woff2      # index.html 即 omox_glass.html 改名
 ```
 
-缓存建议（配好才有「二访 32 KB」）：
+线上走 **Cloudflare Workers Static Assets**（Worker `omoxuse`，`omox.cc` 与 `www.omox.cc` 都指到它）：
 
-```caddy
-# Caddy
-@static path /bg.webp /fonts/*
-header @static { Cache-Control "public, max-age=31536000, immutable" }
-header        { Cache-Control "public, max-age=300, must-revalidate" }
+```toml
+# wrangler.toml
+name = "omoxuse"
+compatibility_date = "2026-10-05"
+main = "worker.js"
+
+[assets]
+directory = "./deploy"
+binding = "ASSETS"
+run_worker_first = true    # 不加这行：静态文件绕过 Worker，安全头/缓存头/裸域跳转全部失效
 ```
 
-Cloudflare：Cache Rules 里给 `/bg.webp` 与 `/fonts/*` 设 Browser TTL 1 年，其余（HTML）设 5 分钟。
-`fonts/*.woff2.orig` 是子集化的源文件，**不要上传**。
+```bash
+# 本仓库根目录就是部署资产（index.html = omox_glass.html 改名）：
+cp omox_glass.html index.html
+mkdir -p deploy && cp index.html bg.webp -r deploy/ 2>/dev/null || (mkdir -p deploy/fonts && cp index.html bg.webp deploy/ && cp fonts/*.woff2 deploy/fonts/)
+CLOUDFLARE_API_TOKEN=<token> npx wrangler deploy --name omoxuse
+```
+
+`worker.js` 负责三件事（assets 层只管吐文件）：
+
+1. **裸域 301 到 www**（`omox.cc/*` 用 Workers Route 指到本 Worker，不动 DNS 记录）
+2. **安全头**：`X-Content-Type-Options` / `Referrer-Policy` / `Permissions-Policy` / `X-Frame-Options` / `Content-Security-Policy: frame-ancestors 'none'` / `Cross-Origin-Opener-Policy` —— meta CSP 表达不了这些响应头指令，必须在边缘补
+3. **缓存头**：HTML `max-age=300, must-revalidate`，`bg.webp` 与 `fonts/*` `max-age=31536000, immutable` —— 配好才有「二访 32 KB」
+
+裸域跳转依赖 Workers Route（`PUT /zones/<zone>/workers/routes`，pattern `omox.cc/*`）；attach custom domain 会因裸域已有手动 A/AAAA 记录报 `externally managed DNS records`，Route 不碰 DNS，是更稳的路。**回滚**：`wrangler deployments list` 找旧 Version ID，或 Dashboard 一键回滚。
 
 ## 致谢 / License
 

@@ -1,0 +1,11 @@
+name = "omoxuse"
+compatibility_date = "2026-10-05"
+main = "worker.js"
+
+# Workers Static Assets：静态文件直接由边缘提供，Worker 只负责头与跳转
+[assets]
+directory = "./deploy"
+binding = "ASSETS"
+# 关键：默认静态文件由 assets 层直接返回、不进 Worker —— fetch 里的安全头/缓存头
+# 与裸域跳转就全部失效（实测拿到的是 assets 默认的 max-age=0）。置 true 让所有请求先过代码。
+run_worker_first = true
