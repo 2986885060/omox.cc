@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- 严格 CSP：脚本只认这一份内联 script 的 hash（改了 script 必须更新 hash，build_glass.py 会提示），没有外域脚本、没有 connect、没有 object。
+     frame-ancestors / Referrer-Policy / nosniff 无法用 meta 表达，必须在服务端（Caddy 或 Cloudflare）配。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-R3B0JnJq3opzwI43J3CMj5DxzmumK5cohWZsSF9eEq4='; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>OMOX — 个人站点</title>
+<meta name="description" content="OMOX 的个人站点：折腾 Android、网络。">
+<meta name="theme-color" content="#06080b">
+<link rel="preload" as="image" href="bg.webp" fetchpriority="high">
+
+<style>
+/* 自托管字体：latin 子集。Roboto Mono 是可变字体（Google 三个字重返回同一 URL），
+   一个文件顶 400/500/700；unicode-range 保留 —— ASCII 块字符（U+2500-257F 等）
+   不在 latin 子集里，照旧回落系统等宽字体，和走 Google CDN 时行为一致。 */
+@font-face{
+  font-family:'Roboto Mono';
+  font-style:normal;
+  font-weight:400 700;
+  font-display:swap;
+  src:url('fonts/roboto-mono-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Share Tech Mono';
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url('fonts/share-tech-mono-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+:root{
+  --bg:#06080b;
+  --fg:#e8eef4;
+  --muted:#9db0c2;
+  --dim:#71879c;
+  --accent:#ffbf5c;
+  --accent-2:#ff8a4c;
+  --amber:#ff7d6b;
+  --stroke:rgba(255,255,255,.13);
+  --stroke-soft:rgba(255,255,255,.075);
+  --shadow:0 26px 60px -28px rgba(0,0,0,.9);
+  --mono:'Roboto Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  --radius:22px;
+  --maxw:1180px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+svg{width:1em;height:1em;flex:none} /* 兜底：未显式设尺寸的图标不会撑爆布局 */
+html{-webkit-text-size-adjust:100%}
+body{
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.7;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(255,191,92,.28);color:#fff}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+
+/* ---------- liquid background ---------- */
+.bg{
+  position:fixed;inset:0;z-index:-2;overflow:hidden;background:var(--bg);
+}
+/* 背景图：cover 适配 + 4px 轻模糊；inset:-10% 给视差留出位移余量 */
+.bg-img{
+  position:absolute;inset:-10%;
+  background-image:url("__BG__");
+  background-size:cover;background-position:center center;
+  background-repeat:no-repeat;
+  filter:blur(4px) saturate(1.12) brightness(1.06);   /* 4px 轻模糊：保住水彩笔触的氛围，柔化锐利边缘 */
+  transform:scale(1.02);                             /* 轻微外扩遮住模糊边缘 */
+}
+/* 遮罩：只压到能读字的程度，氛围光全部走同色系，别跟暖橙打架 */
+.bg-veil{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(1200px 820px at 10% -14%, rgba(255,166,79,.26), transparent 62%),
+    radial-gradient(900px 700px at 92% 4%, rgba(255,96,71,.16), transparent 60%),
+    linear-gradient(180deg, rgba(8,6,9,.36), rgba(8,6,9,.52) 55%, rgba(8,6,9,.68));
+}
+.blob{
+  position:absolute;border-radius:50%;filter:blur(56px);opacity:.26;will-change:transform,translate;
+  translate:calc(var(--px,0) * 24px) calc(var(--py,0) * 18px);
+  transition:translate .9s cubic-bezier(.2,.75,.25,1);
+}
+.b1{width:44vw;height:44vw;left:-10vw;top:-12vw;background:radial-gradient(circle at 32% 32%,#ff9a3c,rgba(255,154,60,0) 70%);animation:drift1 27s ease-in-out infinite alternate}
+.b2{width:40vw;height:40vw;right:-9vw;top:-8vw;background:radial-gradient(circle at 60% 40%,#ff5f57,rgba(255,95,87,0) 70%);animation:drift2 33s ease-in-out infinite alternate}
+.b3{width:48vw;height:48vw;right:2vw;bottom:-20vw;background:radial-gradient(circle at 45% 55%,#c25a2b,rgba(194,90,43,0) 70%);animation:drift3 38s ease-in-out infinite alternate}
+.b4{width:32vw;height:32vw;left:14vw;bottom:-14vw;background:radial-gradient(circle at 50% 50%,#ffb861,rgba(255,184,97,0) 70%);animation:drift2 31s ease-in-out infinite alternate-reverse}
+@keyframes drift1{to{transform:translate3d(14vw,10vh,0) scale(1.18)}}
+@keyframes drift2{to{transform:translate3d(-12vw,14vh,0) scale(1.12)}}
+@keyframes drift3{to{transform:translate3d(-10vw,-12vh,0) scale(1.16)}}
+.grain{
+  position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.045;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- glass ---------- */
+.glass{
+  position:relative;
+  background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.028)),rgba(10,9,13,.54);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);
+  backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:var(--radius);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.15), var(--shadow);
+  /* 3D：倾斜只占 transform；入场上浮和 hover 上浮占独立的 translate 属性，三者互不打架 */
+  transform:perspective(1200px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
+  transform-style:preserve-3d;
+  transition:transform .16s ease-out;
+}
+.glass::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,0) 42%);
+  opacity:.7;
+}
+/* 鼠标跟随打光：吃 --mx/--my，由 JS 写入；渲染在内容层之下，不糊字 */
+.glass::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(420px circle at var(--mx,70%) var(--my,0%),
+             rgba(255,191,92,.14), rgba(255,255,255,.07) 34%, transparent 66%);
+  opacity:0;transition:opacity .45s ease;
+}
+.glass:hover::before{opacity:1}
+@supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+  .glass{background:rgba(15,20,27,.9)}
+}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:60;
+  -webkit-backdrop-filter:blur(18px) saturate(170%);
+  backdrop-filter:blur(18px) saturate(170%);
+  background:rgba(6,8,11,.52);
+  border-bottom:1px solid rgba(255,255,255,.14);
+  box-shadow:0 14px 34px -22px rgba(0,0,0,.95);
+}
+.topbar-in{max-width:var(--maxw);margin:0 auto;padding:13px 20px;display:flex;align-items:center;gap:16px}
+.brand{
+  font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.18em;
+  text-decoration:none;display:flex;align-items:center;gap:9px;white-space:nowrap;
+}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);animation:pulse 2.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
+.crumb{
+  margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.04em;color:var(--dim);
+}
+.crumb a{text-decoration:none;color:var(--muted);transition:color .18s}
+.crumb a:hover{color:var(--accent)}
+.crumb .sep{opacity:.45}
+.crumb .cur{color:var(--fg)}
+.quick{display:flex;gap:6px}
+.quick a{
+  width:32px;height:32px;display:grid;place-items:center;border-radius:10px;
+  color:var(--muted);border:1px solid transparent;transition:.2s;
+}
+.quick a:hover{color:var(--accent);border-color:var(--stroke);background:rgba(255,255,255,.06)}
+.quick svg{width:16px;height:16px}
+
+/* ---------- layout ---------- */
+.wrap{max-width:var(--maxw);margin:0 auto;padding:26px 20px 44px}
+/* 入场：交给 IntersectionObserver，滚到哪哪浮起，带 --d 级联延迟
+   上浮用 translate 独立属性 —— transform 留给 3D 倾斜，两边才不会互相覆盖 */
+.rise{opacity:0;translate:0 18px}
+.rise.in{
+  opacity:1;translate:0 0;
+  transition:opacity .68s cubic-bezier(.2,.75,.25,1),
+             translate .68s cubic-bezier(.2,.75,.25,1),
+             transform .16s ease-out;
+  transition-delay:var(--d,0ms), var(--d,0ms), 0s;
+}
+
+/* ---------- hero ---------- */
+.hero{padding:30px 30px 26px;overflow:hidden}
+.dots{display:flex;gap:7px;margin-bottom:18px}
+.dots i{width:11px;height:11px;border-radius:50%;display:block}
+.dots i:nth-child(1){background:#ff5f57}
+.dots i:nth-child(2){background:#febc2e}
+.dots i:nth-child(3){background:#28c840}
+.hero-grid{display:grid;gap:24px;align-items:center}
+@media(min-width:900px){.hero-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}}
+.kicker{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.34em;text-transform:uppercase;
+  color:var(--accent);display:flex;align-items:center;gap:10px;
+}
+.kicker::before{content:"";width:26px;height:1px;background:linear-gradient(90deg,var(--accent),transparent)}
+.hero h1{
+  font-family:'Share Tech Mono',var(--mono);
+  font-size:clamp(40px,7.4vw,66px);line-height:1;letter-spacing:.04em;font-weight:400;
+  margin:16px 0 12px;
+  background:linear-gradient(180deg,#ffffff 8%,#ffe3bd 55%,#ffc06a 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero h1{
+  /* 3D 挤出：渐变字是 background-clip:text，shadow 必须显式给色才看得见 */
+  text-shadow:
+    0 1px 0 #b98a4e, 0 2px 0 #a5763f, 0 3px 0 #8c6334, 0 4px 0 #74512b,
+    0 12px 24px rgba(0,0,0,.55), 0 26px 46px rgba(0,0,0,.42);
+}
+.promptline{
+  margin-top:22px;font-family:var(--mono);font-size:13.5px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.about-text,.cat-head .desc,.d-head .sub,.row .t{
+  word-break:keep-all;overflow-wrap:break-word;
+}
+/* grid/flex 子项默认 min-width:auto —— 取的是内容的 min-content，
+   而 keep-all 的中文长句（中间无标点，如「第三方客户端与跑在手机上的本地大模型」）
+   min-content 就是整句宽度；overflow-wrap:break-word 又不计入 min-content，
+   于是列被整句撑破：390 宽的手机上左栏宽到 414、页面能左右晃 53px。
+   给这些容器补 min-width:0，宽度被约束后 break-word 才真正接管换行。 */
+.grid > *, .stack > *, .rail > *, .cat-head > *, .card, .detail{min-width:0}
+.cat-head .desc,.about-text,.d-head .sub{max-width:100%}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;
+  border:1px solid var(--stroke);background:rgba(255,255,255,.06);
+  font-family:var(--mono);font-size:12.5px;color:var(--muted);text-decoration:none;transition:.2s;
+}
+.chip:hover{color:var(--accent);border-color:rgba(255,191,92,.45);background:rgba(255,191,92,.1);transform:translateY(-1px)}
+.chip svg{width:14px;height:14px}
+.banner-wrap{
+  border-radius:16px;padding:22px 22px;overflow-x:auto;
+  background:linear-gradient(180deg,rgba(0,0,0,.36),rgba(0,0,0,.18));
+  border:1px solid var(--stroke-soft);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09), inset 0 0 40px rgba(255,191,92,.06);
+  scrollbar-width:thin;scrollbar-color:rgba(255,191,92,.45) transparent;
+}
+.banner-wrap::-webkit-scrollbar{height:6px}
+.banner-wrap::-webkit-scrollbar-track{background:rgba(255,255,255,.05);border-radius:99px}
+.banner-wrap::-webkit-scrollbar-thumb{background:rgba(255,191,92,.4);border-radius:99px}
+.banner-wrap::-webkit-scrollbar-thumb:hover{background:rgba(255,191,92,.7)}
+.ascii{
+  font-family:var(--mono);font-weight:700;line-height:1.16;white-space:pre;
+  font-size:clamp(6px,1vw,11px);letter-spacing:.02em;
+  color:var(--accent);text-shadow:0 0 18px rgba(255,191,92,.5);
+  min-width:max-content;
+}
+.ocr{display:none}
+
+/* ---------- main grid ---------- */
+.grid{display:grid;gap:18px;margin-top:20px}
+@media(min-width:980px){
+  .grid{grid-template-columns:322px minmax(0,1fr);align-items:start}
+  .rail{position:sticky;top:74px}
+}
+.rail{display:grid;gap:18px}
+.stack{display:grid;gap:18px}
+.stack-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:2px 4px;
+}
+.stack-title{font-family:var(--mono);font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:#c6d4e0}
+.stats{display:grid;gap:9px}
+.stat{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-family:var(--mono);font-size:12.5px;
+  padding:8px 12px;border-radius:11px;
+  border:1px solid var(--stroke-soft);background:rgba(255,255,255,.04);
+}
+.stat span{color:var(--dim);letter-spacing:.08em}
+.stat b{color:var(--accent);font-weight:600}
+.card{padding:24px 24px 22px}
+/* 卡片上浮：transition 里带上入场那两条，避免被 .rise.in 覆盖后变瞬变 */
+.card.in{
+  transition:opacity .68s cubic-bezier(.2,.75,.25,1),
+             translate .68s cubic-bezier(.2,.75,.25,1),
+             transform .16s ease-out,
+             border-color .45s ease, box-shadow .45s ease;
+  transition-delay:var(--d,0ms), var(--d,0ms), 0s, 0s, 0s;
+}
+.card.in:hover{
+  translate:0 -6px;
+  border-color:rgba(255,191,92,.26);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2), 0 40px 76px -34px rgba(0,0,0,.96);
+}
+.card.in:hover .ico{transform:rotate(-8deg) scale(1.08)}
+.ico{transition:transform .42s cubic-bezier(.2,.75,.25,1)}
+.card-title{
+  font-family:var(--mono);font-size:12px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--dim);display:flex;align-items:center;gap:9px;margin-bottom:14px;
+}
+.card-title svg{width:15px;height:15px;color:var(--accent)}
+.about-text{font-size:15.5px;color:#d3dde6}
+.about-text p+p{margin-top:8px}
+.about-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.tag{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;padding:5px 11px;border-radius:999px;
+  border:1px solid rgba(255,191,92,.32);color:var(--accent);background:rgba(255,191,92,.08);
+}
+/* About 的分类标签是真链接：点开对应分类页 */
+a.tag{text-decoration:none;transition:transform .18s ease,background .18s ease,border-color .18s ease}
+a.tag:hover{background:rgba(255,191,92,.2);border-color:rgba(255,191,92,.6);transform:translateY(-1px)}
+a.tag:active{transform:translateY(0)}
+/* 分类玻璃板整块可点（文章行另有 href，互不干扰） */
+.card[data-cat]{cursor:pointer}
+.contact-list{display:grid;gap:10px}
+.contact-list a{
+  display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:14px;text-decoration:none;
+  border:1px solid var(--stroke-soft);background:rgba(255,255,255,.045);
+  font-family:var(--mono);font-size:13.5px;color:var(--muted);transition:.2s;
+}
+.contact-list a:hover{
+  color:var(--fg);border-color:rgba(255,191,92,.42);background:rgba(255,191,92,.09);
+  transform:translateX(3px);
+}
+.contact-list svg{width:16px;height:16px;color:var(--accent);flex:none}
+.contact-list .ext{margin-left:auto;opacity:.5}
+
+/* ---------- category cards ---------- */
+.cat-head{display:flex;align-items:flex-start;gap:15px;margin-bottom:6px}
+.ico{
+  width:44px;height:44px;flex:none;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(150deg,rgba(255,191,92,.22),rgba(255,138,76,.14));
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24);
+}
+.ico svg{width:21px;height:21px;color:#ffe7c2}
+.cat-head h2{font-family:var(--mono);font-size:19px;letter-spacing:.08em;font-weight:700}
+.cat-head .desc{font-size:14px;color:var(--muted);margin-top:3px}
+.count{
+  margin-left:auto;font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;
+  color:var(--dim);border:1px solid var(--stroke-soft);border-radius:999px;padding:4px 10px;
+  white-space:nowrap;align-self:center;
+}
+.rows{list-style:none;margin-top:14px;display:grid;gap:9px}
+.row{
+  display:flex;align-items:center;gap:13px;text-decoration:none;
+  padding:13px 15px;border-radius:15px;position:relative;overflow:hidden;
+  border:1px solid var(--stroke-soft);
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+  transition:transform .22s cubic-bezier(.2,.75,.25,1),border-color .22s,background .22s,box-shadow .22s;
+}
+/* 流光扫过 */
+.row::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(105deg,transparent 32%,rgba(255,255,255,.17) 50%,transparent 68%);
+  transform:translateX(-130%);transition:transform .75s cubic-bezier(.2,.75,.25,1);
+}
+.row:hover::after{transform:translateX(130%)}
+.row:hover{
+  transform:translateX(5px);
+  border-color:rgba(255,191,92,.4);
+  background:linear-gradient(180deg,rgba(255,191,92,.11),rgba(255,191,92,.035));
+  box-shadow:0 12px 30px -18px rgba(255,191,92,.9);
+}
+.row .idx{
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);letter-spacing:.06em;
+  border:1px solid var(--stroke-soft);border-radius:7px;padding:2px 6px;flex:none;
+}
+.row:hover .idx{color:var(--accent);border-color:rgba(255,191,92,.4)}
+.row .t{font-size:15px;color:#dee7ef;flex:1;min-width:0}
+.row .go{color:var(--dim);display:grid;place-items:center;transition:.22s}
+.row:hover .go{color:var(--accent);transform:translateX(3px)}
+.row .go svg{width:16px;height:16px}
+
+/* ---------- detail ---------- */
+.detail{padding:32px 34px 36px}
+.back{
+  display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.1em;color:var(--muted);
+  border:1px solid var(--stroke-soft);background:rgba(255,255,255,.05);
+  padding:7px 14px;border-radius:999px;transition:.2s;
+}
+.back:hover{color:var(--accent);border-color:rgba(255,191,92,.45);background:rgba(255,191,92,.1)}
+.back svg{width:14px;height:14px}
+.d-head{border-bottom:1px solid var(--stroke-soft);padding-bottom:24px;margin-bottom:26px}
+.d-meta{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:18px 0 10px}
+.d-meta .cat{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:#ffd9a3;border:1px solid rgba(255,191,92,.42);background:rgba(8,6,9,.5);
+  padding:4px 11px;border-radius:999px;
+}
+.d-meta .len{font-family:var(--mono);font-size:11.5px;color:var(--dim);letter-spacing:.06em}
+.d-head h1{font-size:clamp(25px,4.6vw,36px);line-height:1.28;font-weight:700;letter-spacing:.01em}
+.d-head .sub{margin-top:9px;color:var(--muted);font-size:15px}
+.d-body{
+  font-family:var(--mono);font-size:14.2px;line-height:1.92;
+  white-space:pre-wrap;overflow-wrap:break-word;color:#d6e0ea;
+  /* 详情页正文 8000+ 字：视口外的段落跳过布局与绘制；auto 让浏览器记住真实渲染
+     高度，滚动条不会按估算值乱跳。长文滚动帧率的直接受益点。 */
+  content-visibility:auto;
+  contain-intrinsic-size:auto 9400px;   /* 4000 是首测估值，实测 d-body 高 9407px：估小一半会让首次进详情滚动条跳 */
+}
+.d-body a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(255,191,92,.35)}
+.d-body a:hover{background:rgba(255,191,92,.14)}
+.ln.sec{color:var(--accent-2);font-weight:700;letter-spacing:.05em}
+.ln.warn{color:var(--amber)}
+.ln.mk{color:#f7ecdc}
+.ln.mk::selection{background:var(--accent);color:#000}
+.sibs{margin-top:30px;padding-top:22px;border-top:1px solid var(--stroke-soft)}
+.sibs .lab{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+.sibs .list{display:flex;flex-wrap:wrap;gap:9px}
+.sibs a{
+  text-decoration:none;font-size:13.5px;padding:9px 15px;border-radius:999px;
+  border:1px solid var(--stroke-soft);background:rgba(255,255,255,.05);color:var(--muted);transition:.2s;
+}
+.sibs a:hover{color:var(--accent);border-color:rgba(255,191,92,.45);background:rgba(255,191,92,.1);transform:translateY(-2px)}
+.sibs a.on{color:#2a1a06;background:var(--accent);border-color:var(--accent);font-weight:600}
+
+/* ---------- 详情页分阶段出场：先玻璃板，再逐个文字 ---------- */
+@keyframes stgIn{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:none}}
+.stg{
+  opacity:0;
+  animation:stgIn .6s cubic-bezier(.2,.75,.25,1) forwards;
+  animation-delay:calc(var(--i,0) * 85ms + 420ms);
+}
+.blk{opacity:0;animation:stgIn .55s cubic-bezier(.2,.75,.25,1) forwards}
+
+/* ---------- 常驻导航控件 ---------- */
+/* 顶栏返回：长文滚到中间也能直接退，不用先回顶部 */
+.topback{
+  display:inline-flex;align-items:center;gap:7px;
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.08em;
+  padding:6px 13px;border-radius:999px;text-decoration:none;white-space:nowrap;
+  color:var(--muted);border:1px solid var(--stroke-soft);
+  background:rgba(255,255,255,.06);transition:.2s;
+}
+.topback:hover{color:var(--accent);border-color:rgba(255,191,92,.45);background:rgba(255,191,92,.1);transform:translateX(-2px)}
+.topback:active{transform:scale(.955)}
+.topback svg{width:14px;height:14px}
+.topback[hidden]{display:none}
+
+/* 浮动回顶：滚下去才现身 */
+.totop{
+  position:fixed;right:18px;bottom:18px;z-index:70;
+  width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+  color:var(--accent);cursor:pointer;padding:0;
+  background:rgba(10,9,13,.62);
+  -webkit-backdrop-filter:blur(14px) saturate(160%);
+  backdrop-filter:blur(14px) saturate(160%);
+  border:1px solid rgba(255,255,255,.16);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 16px 34px -18px rgba(0,0,0,.9);
+  opacity:0;transform:translateY(14px) scale(.9);pointer-events:none;
+  transition:opacity .3s, transform .3s cubic-bezier(.2,.75,.25,1),
+             background .2s, border-color .2s;
+}
+.totop.on{opacity:1;transform:none;pointer-events:auto}
+.totop:hover{background:rgba(255,191,92,.15);border-color:rgba(255,191,92,.5)}
+.totop:active{transform:scale(.9)}
+.totop svg{width:18px;height:18px}
+
+/* 3D 层深：卡片倾斜时这些元素比卡面更靠近眼睛（正对时只放大零点几%，看不出） */
+.glass .ico{translate:0 0 26px}
+.glass .card-title,.glass .cat-head h2,.glass .d-head h1,.glass .hero h1{translate:0 0 14px}
+.glass .rows,.glass .contact-list,.glass .stats,.glass .about-text,
+.glass .d-body,.glass .sibs,.glass .banner-wrap,.glass .ocr{translate:0 0 7px}
+
+/* 背景模糊调低后，卡片外的裸字要自己带影子才稳 */
+.stack-title,.kicker{text-shadow:0 1px 3px rgba(0,0,0,.96), 0 0 14px rgba(0,0,0,.8)}
+
+/* ---------- 按压反馈 / 小微动 ---------- */
+.chip:active, .back:active, .contact-list a:active, .sibs a:active{transform:scale(.955)}
+.row:active{transform:translateX(4px) scale(.985)}
+.quick a{transition:.2s}
+.quick a:hover{transform:translateY(-2px)}
+.quick a:active{transform:scale(.9)}
+.brand .dot{transition:box-shadow .3s}
+.brand:hover .dot{box-shadow:0 0 16px var(--accent)}
+.crumb a{position:relative}
+.crumb a::after{
+  content:"";position:absolute;left:0;right:0;bottom:-4px;height:1px;background:currentColor;
+  transform:scaleX(0);transform-origin:left;transition:transform .32s cubic-bezier(.2,.75,.25,1);
+}
+.crumb a:hover::after{transform:scaleX(1)}
+
+/* 阅读进度条：仅详情页出现 */
+.progress{
+  position:fixed;top:0;left:0;height:2px;width:0;opacity:0;z-index:90;pointer-events:none;
+  background:linear-gradient(90deg,var(--accent),var(--accent-2));
+  box-shadow:0 0 12px rgba(255,191,92,.75);
+  transition:width .14s linear,opacity .3s ease;
+}
+/* 现代浏览器：进度条直接吃滚动位置，跑在合成器线程 —— 主线程的 scroll 监听
+   少算一件事，JS 侧同步跳过 width 写入（两套只会有一边动它）。 */
+@supports (animation-timeline:scroll()){
+  .progress{
+    width:100%;
+    transform:scaleX(0);transform-origin:0 50%;
+    transition:opacity .3s ease;
+  }
+  body.reading .progress{
+    animation:progress-grow linear both;
+    animation-timeline:scroll(root block);
+  }
+  @keyframes progress-grow{
+    from{opacity:1;transform:scaleX(0)}
+    to{opacity:1;transform:scaleX(1)}
+  }
+}
+
+/* ---------- responsive ---------- */
+@media(max-width:700px){
+  /* 竖屏 cover 会大幅裁左右：图主体偏左，往左挪一点才裁得到人 */
+  .bg-img{background-position:42% center;filter:blur(4px) saturate(1.12) brightness(1.06);transform:scale(1.02);}
+  /* 移动端 ASCII 换成 OCR 大字海报：wrap 隐藏（fitAscii 靠 offsetParent===null 跳过），
+     竖屏留 ASCII 小字撑不起氛围，而且两个 banner 堆一起是视觉重复 */
+  .banner-wrap{display:none}
+  .ocr{
+    display:block;
+    border-radius:16px;padding:22px 20px;
+    background:linear-gradient(180deg,rgba(0,0,0,.34),rgba(0,0,0,.16));
+    border:1px solid var(--stroke-soft);
+    font-family:'Share Tech Mono',var(--mono);font-size:clamp(30px,11vw,52px);line-height:1.06;
+    letter-spacing:.05em;color:var(--accent);text-shadow:0 0 26px rgba(255,191,92,.45);
+  }
+}
+@media(max-width:640px){
+  .wrap{padding:18px 14px 56px}
+  .topbar-in{padding:12px 14px;gap:10px}
+  .crumb{font-size:11.5px;gap:6px}
+  .quick{display:none}
+  .hero{padding:22px 18px 20px}
+  .card,.detail{padding:20px 18px 20px}
+  .d-body{font-size:13.4px;line-height:1.86}
+  .row{padding:12px 13px}
+  .row .t{font-size:14.5px}
+  .chip{min-height:40px;padding:9px 15px}
+  .contact-list a{min-height:46px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  .rise,.rise.in{opacity:1;translate:none;transition-delay:0s !important}
+  .stg,.blk{opacity:1 !important;animation-delay:0s !important}
+}
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true">
+  <div class="bg-img"></div>
+  <div class="bg-veil"></div>
+  <span class="blob b1"></span><span class="blob b2"></span>
+  <span class="blob b3"></span><span class="blob b4"></span>
+</div>
+<div class="grain" aria-hidden="true"></div>
+<div class="progress" id="progress" aria-hidden="true"></div>
+<button class="totop" id="totop" type="button" aria-label="回到顶部">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5.5 11.5 6.5-6.5 6.5 6.5"/></svg>
+</button>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#/"><span class="dot"></span>OMOX</a>
+    <a class="topback" id="topback" href="#/" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H6"/><path d="m11.5 6-6 6 6 6"/></svg>
+      <span id="topbackLabel">返回</span>
+    </a>
+    <nav class="crumb" id="crumb" aria-label="面包屑"></nav>
+    <div class="quick">
+      <a href="https://github.com" target="_blank" rel="noopener" aria-label="GitHub" title="GitHub">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>
+      </a>
+      <a href="mailto:blog@omox.cc" aria-label="Email" title="blog@omox.cc">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7.5 8.5 6 8.5-6"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="app"></main>
+<noscript>
+  <div style="max-width:640px;margin:60px auto;padding:28px;border:1px solid rgba(255,255,255,.14);
+       border-radius:18px;background:rgba(10,9,13,.82);font:15px/1.8 -apple-system,'PingFang SC','Microsoft YaHei',sans-serif;color:#d6e0ea">
+    <b style="color:#ffbf5c">OMOX · 个人站点</b><br>
+    这个页面由内联 JavaScript 渲染，当前浏览器禁用了 JS，所以正文没有出来。<br>
+    开启 JavaScript 后刷新即可；文章内容同时收录在
+    <a style="color:#ffbf5c" href="https://github.com/2986885060/FxxkPush" target="_blank" rel="noopener">GitHub</a> 上。
+  </div>
+</noscript>
+
+<script>
+/* 字体改自托管 @font-face（font-display:swap）：浏览器自己按需拉、不阻塞渲染，
+   不再需要 media="print" 那套非阻塞 hack，也就不需要内联 onload —— 那玩意儿会
+   逼得 CSP 的 script-src 只能放 'unsafe-inline'。 */
+const TEXT = /*__TEXT__*/;
+const ASCII = "______  ______   ______   __    __   __   __   __   ______   __\n/\\__  _\\/\\  ___\\ /\\  == \\ /\\ \"-./  \\ /\\ \\ /\\ \"-.\\ \\ /\\  __ \\ /\\ \\\n\\/_/\\ \\/\\ \\  __\\ \\ \\  __< \\ \\ \\-./\\ \\\\ \\ \\\\ \\ \\-.  \\\\ \\  __ \\\\ \\ \\____\n   \\ \\_\\ \\ \\_____\\\\ \\_\\ \\_\\\\ \\_\\ \\ \\_\\\\ \\_\\\\ \\_\\\\\"\\_\\\\ \\_\\ \\_\\\\ \\_____\\\n    \\/_/  \\/_____/ \\/_/ /_/ \\/_/  \\/_/ \\/_/ \\/_/ \\/_/ \\/_/\\/_/ \\/_____/\n ______  ______   ______  ______  ______  ______   __       __   ______\n/\\  == \\/\\  __ \\ /\\  == \\/\\__  _\\/\\  ___\\/\\  __ \\ /\\ \\     /\\ \\ /\\  __ \\\n\\ \\  _-/\\ \\ \\/\\ \\\\ \\  __<\\/_/\\ \\/\\ \\  __\\\\ \\ \\/\\ \\\\ \\ \\____\\ \\ \\\\ \\ \\/\\ \\\n \\ \\_\\   \\ \\_____\\\\ \\_\\ \\_\\ \\ \\_\\ \\ \\_\\   \\ \\_____\\\\ \\_____\\\\ \\_\\\\ \\_\\ \\_\\\n  \\/_/    \\/_____/ \\/_/ /_/  \\/_/  \\/_/    \\/_____/ \\/_____/ \\/_/ \\/_____/";
+
+const CATS = [
+  {key:'skills-1', name:'Android', icon:'android', desc:'Root 方案与自建消息推送',
+   items:[
+    {key:'skills-1-1', title:'avbroot — 锁 Bootloader 的 Root 方案'},
+    {key:'skills-1-2', title:'FxxkPush — 自建 AI 消息分诊推送'}]},
+  {key:'skills-2', name:'Network', icon:'network', desc:'代理、伪装站、玻璃主页与域名邮箱',
+   items:[
+    {key:'skills-2-1', title:'多协议代理部署教程'},
+    {key:'skills-2-2', title:'伪装网站部署方案'},
+    {key:'skills-2-3', title:'个人玻璃卡片主页'},
+    {key:'skills-2-4', title:'域名邮箱部署教程'}]}
+];
+const CAT_BY_ITEM = {};
+CATS.forEach(c => c.items.forEach(it => { CAT_BY_ITEM[it.key] = c; }));
+const CAT_BY_KEY = {};
+CATS.forEach(c => { CAT_BY_KEY[c.key] = c; });
+const POST_COUNT = CATS.reduce(function(s, c){ return s + c.items.length; }, 0);
+
+const ICONS = {
+  user:'<circle cx="12" cy="8" r="3.6"/><path d="M4.6 20a7.4 7.4 0 0 1 14.8 0"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7.5 8.5 6 8.5-6"/>',
+  android:'<path d="M5.5 11.2a6.5 6.5 0 0 1 13 0z"/><path d="M8.4 4.6 9.8 7.2"/><path d="M15.6 4.6 14.2 7.2"/><path d="M9.6 8.6h.01"/><path d="M14.4 8.6h.01"/><rect x="6" y="13" width="12" height="7" rx="2"/><path d="M3.4 12.6v3.6"/><path d="M20.6 12.6v3.6"/>',
+  network:'<circle cx="12" cy="5" r="2.6"/><circle cx="5.2" cy="18" r="2.6"/><circle cx="18.8" cy="18" r="2.6"/><path d="M10.6 7.3 6.6 15.7"/><path d="M13.4 7.3l4 8.4"/><path d="M7.8 18h8.4"/>',
+  arrow:'<path d="M5 12h13"/><path d="m12.5 6 6 6-6 6"/>',
+  back:'<path d="M19 12H6"/><path d="m11.5 6-6 6 6 6"/>',
+  ext:'<path d="M14 5h5v5"/><path d="M19 5l-8.5 8.5"/><path d="M18.5 14v4a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 18V9A2.5 2.5 0 0 1 7 6.5h4"/>',
+  doc:'<path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5"/><path d="M8.5 13h7"/><path d="M8.5 16.5h5"/>'
+};
+function icon(n, cls){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"'
+    + (cls ? ' class="' + cls + '"' : '') + '>' + (ICONS[n] || '') + '</svg>';
+}
+var ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'};
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return ESC_MAP[c]; }); }
+function linkify(s){
+  return s.replace(/https?:\/\/[A-Za-z0-9.-]+\.[A-Za-z]{2,}[^\s<"]*/g, function(u){
+    var t = u.replace(/[)\\,;.]+$/, '');
+    return '<a href="' + t + '" target="_blank" rel="noopener">' + t + '</a>' + u.slice(t.length);
+  });
+}
+function norm(s){ return String(s).replace(/\r\n?/g,'\n'); }
+function lines(s){ return norm(s).split('\n'); }
+
+/* 拆掉原文的分隔线、标题行和「输入 0 返回」提示 —— 结果按 key 缓存，
+   render() 里 title/crumb/body 会问三次，没必要算三遍。 */
+var parsedCache = {};
+function parseDetail(key){
+  if (parsedCache[key]) return parsedCache[key];
+  var raw = lines(TEXT[key]);
+  while (raw.length && !raw[0].trim()) raw.shift();
+  if (raw.length && /^[─═\-_=]+$/.test(raw[0].trim())) raw.shift();
+  var title = raw.length ? raw[0].trim() : key;
+  if (raw.length) raw.shift();
+  if (raw.length && /^[─═\-_=]+$/.test(raw[0].trim())) raw.shift();
+  var body = raw.filter(function(l){ return !/^\s*输入 0 返回\s*$/.test(l); });
+  while (body.length && !body[body.length-1].trim()) body.pop();
+  while (body.length && /^[─═]+$/.test(body[body.length-1].trim())) body.pop();
+  while (body.length && !body[body.length-1].trim()) body.pop();
+  return (parsedCache[key] = {title: title, body: body.join('\n')});
+}
+function bodyHTML(raw){
+  var ls = lines(raw);
+  var CHUNK = 18, out = [];
+  for (var i = 0; i < ls.length; i += CHUNK){
+    var idx = out.length;
+    /* 前 7 块逐块刷出，后面加速跟上 —— 长文不会拖到两三秒才读上 */
+    var delay = 820 + Math.min(idx, 6) * 65 + Math.max(0, idx - 6) * 12;
+    var html = ls.slice(i, i + CHUNK).map(function(l){
+      /* 只有着色行才包 span：350 行的教程里 300+ 行是纯文本，
+         每行一个 span 等于白送几百个 DOM 节点和解析开销。 */
+      if (l.indexOf('══') !== -1) return '<span class="ln sec">' + linkify(esc(l)) + '</span>';
+      if (l.indexOf('⚠') !== -1)  return '<span class="ln warn">' + linkify(esc(l)) + '</span>';
+      if (l.indexOf('▸') !== -1)  return '<span class="ln mk">' + linkify(esc(l)) + '</span>';
+      return linkify(esc(l));
+    }).join('\n');
+    out.push('<div class="blk" style="animation-delay:' + delay + 'ms">' + html + '</div>');
+  }
+  return out.join('');
+}
+
+/* ---------- views ---------- */
+function heroHTML(){
+  var parts = ASCII.split(/\n\s*\n/);
+  var art = parts[0].replace(/\s+$/,'');
+  return '' +
+  '<section class="glass hero rise" style="--d:40ms">' +
+    '<div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>' +
+    '<div class="hero-grid">' +
+      '<div>' +
+        '<div class="kicker">Terminal Portfolio</div>' +
+        '<h1>OMOX</h1>' +
+        '<div class="promptline">' +
+          '<a class="chip" href="mailto:blog@omox.cc">' + icon('mail') + '联系我</a>' +
+        '</div>' +
+      '</div>' +
+      '<div>' +
+        '<div class="banner-wrap"><pre class="ascii">' + esc(art) + '</pre></div>' +
+        '<div class="ocr" aria-hidden="true">OMOX<br>TERMINAL<br>PORTFOLIO</div>' +
+      '</div>' +
+    '</div>' +
+  '</section>';
+}
+function aboutCard(){
+  var txt = lines(TEXT.about).filter(function(l){ return l.trim() && l.trim() !== '输入 0 返回'; });
+  return '' +
+  '<section class="glass card rise" style="--d:120ms">' +
+    '<div class="card-title">' + icon('user') + 'About</div>' +
+    '<div class="about-text">' + txt.map(function(l){ return '<p>' + esc(l) + '</p>'; }).join('') + '</div>' +
+    '<div class="about-tags">' + CATS.map(function(c){
+      return '<a class="tag" href="#/c/' + c.key + '">' + esc(c.name) + '</a>';
+    }).join('') + '</div>' +
+  '</section>';
+}
+function contactCard(){
+  var links = [
+    {icon:'mail',  label:'blog@omox.cc', href:'mailto:blog@omox.cc'},
+    {icon:'ext',   label:'omox.cc',      href:'https://www.omox.cc'},   /* 裸域不走 CF、http 下还回旧文件，一律指到 www */
+    {icon:'user',  label:'GitHub',       href:'https://github.com'}
+  ];
+  return '' +
+  '<section class="glass card rise" style="--d:180ms">' +
+    '<div class="card-title">' + icon('mail') + 'Contact</div>' +
+    '<div class="contact-list">' + links.map(function(l){
+      return '<a href="' + l.href + '"' + (l.href.indexOf('http') === 0 ? ' target="_blank" rel="noopener"' : '') + '>' +
+        icon(l.icon) + '<span>' + l.label + '</span><span class="ext">' + icon('ext') + '</span></a>';
+    }).join('') + '</div>' +
+  '</section>';
+}
+function catCard(c, i){
+  return '' +
+  '<section class="glass card rise" id="cat-' + c.key + '" data-cat="' + c.key + '" style="--d:' + (160 + i * 70) + 'ms">' +
+    '<div class="cat-head">' +
+      '<span class="ico">' + icon(c.icon) + '</span>' +
+      '<div><h2>' + c.name + '</h2><div class="desc">' + esc(c.desc) + '</div></div>' +
+      '<span class="count">' + c.items.length + ' 篇</span>' +
+    '</div>' +
+    '<ul class="rows">' + c.items.map(function(it, n){
+      return '<li><a class="row" href="#/p/' + it.key + '">' +
+        '<span class="idx">' + String(n + 1).padStart(2,'0') + '</span>' +
+        '<span class="t">' + esc(it.title) + '</span>' +
+        '<span class="go">' + icon('arrow') + '</span></a></li>';
+    }).join('') + '</ul>' +
+  '</section>';
+}
+function statsCard(){
+  var rows = [
+    ['文章', POST_COUNT + ' 篇'],
+    ['分类', CATS.length + ' 类'],
+    ['形态', '纯静态站'],
+    ['原版', '终端交互']
+  ];
+  return '' +
+  '<section class="glass card rise" style="--d:240ms">' +
+    '<div class="card-title">' + icon('doc') + 'Stats</div>' +
+    '<div class="stats">' + rows.map(function(r){
+      return '<div class="stat"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>';
+    }).join('') + '</div>' +
+  '</section>';
+}
+var homeCache = null;
+function homeView(){
+  if (homeCache) return homeCache;
+  return (homeCache = heroHTML() +
+    '<div class="grid">' +
+      '<div class="rail">' + aboutCard() + contactCard() + statsCard() + '</div>' +
+      '<div class="stack">' +
+        '<div class="stack-head rise" style="--d:100ms">' +
+          '<span class="stack-title">Content</span>' +
+        '</div>' +
+        CATS.map(catCard).join('') +
+      '</div>' +
+    '</div>');
+}
+var catCache = {};
+/* 分类页：About 标签与分类玻璃板共用的“对应界面”。结构与详情页同源
+   （d-head 进场时序、back 按钮、row 样式全部复用），只是正文换成文章列表。 */
+function catView(key){
+  if (catCache[key]) return catCache[key];
+  var cat = CAT_BY_KEY[key];
+  if (!cat) return homeView();
+  /* 逐行刷出，节奏与详情页正文同一套：标题(stg --i:3≈675ms) → sub(≈760ms)
+     → 行从 820ms 起每行 +65ms。不挂动画的话行是 opacity:1 直接摆出来的，
+     会跑在标题前面 —— 先见条目后见标题。 */
+  var rows = cat.items.map(function(it, n){
+    var delay = 820 + n * 65;
+    return '<li class="blk" style="animation-delay:' + delay + 'ms">' +
+      '<a class="row" href="#/p/' + it.key + '">' +
+      '<span class="idx">' + String(n + 1).padStart(2, '0') + '</span>' +
+      '<span class="t">' + esc(it.title) + '</span>' +
+      '<span class="go">' + icon('arrow') + '</span></a></li>';
+  }).join('');
+  return (catCache[key] = '' +
+    '<article class="glass detail catpage rise">' +
+      '<div class="d-head">' +
+        '<a class="back stg" style="--i:1" href="#/" data-anchor="cat-' + cat.key + '">' + icon('back') + '返回首页</a>' +
+        '<div class="d-meta stg" style="--i:2"><span class="cat">' + cat.name + '</span>' +
+          '<span class="len">' + cat.items.length + ' 篇</span></div>' +
+        '<h1 class="stg" style="--i:3">' + esc(cat.name) + '</h1>' +
+        '<p class="sub stg" style="--i:4">' + esc(cat.desc) + '</p>' +
+      '</div>' +
+      '<ul class="rows">' + rows + '</ul>' +
+    '</article>');
+}
+
+var detailCache = {};
+function detailView(key){
+  if (detailCache[key]) return detailCache[key];
+  var cat = CAT_BY_ITEM[key];
+  if (!cat) return homeView();
+  var it = cat.items.filter(function(x){ return x.key === key; })[0];
+  if (!it) return homeView();
+  var d = parseDetail(key);
+  var sibs = cat.items.map(function(x){
+    return '<a href="#/p/' + x.key + '"' + (x.key === key ? ' class="on"' : '') + '>' + esc(x.title) + '</a>';
+  }).join('');
+  var chars = d.body.replace(/\s/g,'').length;
+  return (detailCache[key] = '' +
+  '<article class="glass detail rise">' +
+    '<div class="d-head">' +
+      '<a class="back stg" style="--i:1" href="#/" data-anchor="cat-' + cat.key + '">' + icon('back') + '返回 ' + cat.name + '</a>' +
+      '<div class="d-meta stg" style="--i:2"><span class="cat">' + cat.name + '</span><span class="len">' + chars + ' 字 · 约 ' + Math.max(1, Math.round(chars / 400)) + ' 分钟</span></div>' +
+      '<h1 class="stg" style="--i:3">' + esc(d.title) + '</h1>' +
+      '<p class="sub stg" style="--i:4">' + esc(cat.desc) + '</p>' +
+    '</div>' +
+    '<div class="d-body">' + bodyHTML(d.body) + '</div>' +
+    '<nav class="sibs stg" style="--i:12"><div class="lab">' + cat.name + ' / 其他文章</div><div class="list">' + sibs + '</div></nav>' +
+  '</article>');
+}
+
+/* ---------- router ---------- */
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';  /* 手动控制滚动，别让浏览器插一脚 */
+
+const app = document.getElementById('app');
+const crumb = document.getElementById('crumb');
+const topback = document.getElementById('topback');
+const topbackLabel = document.getElementById('topbackLabel');
+const totop = document.getElementById('totop');
+function crumbHTML(parts){
+  var html = '<a href="#/">OMOX</a>';
+  parts.forEach(function(p){
+    html += '<span class="sep">/</span>';
+    html += p.href ? '<a href="' + p.href + '"' + (p.anchor ? ' data-anchor="' + p.anchor + '"' : '') + '>' + esc(p.label) + '</a>'
+                   : '<span class="cur">' + esc(p.label) + '</span>';
+  });
+  return html;
+}
+function render(){
+  var hash = location.hash.replace(/^#/,'');
+  var m = hash.match(/^\/p\/([a-z0-9-]+)$/i);
+  var cm = hash.match(/^\/c\/([a-z0-9-]+)$/i);
+  if (m && TEXT[m[1]] && CAT_BY_ITEM[m[1]]) {
+    var key = m[1], cat = CAT_BY_ITEM[key];
+    app.innerHTML = detailView(key);
+    crumb.innerHTML = crumbHTML([{href:'#/', label:cat.name, anchor:'cat-' + cat.key}, {label:parseDetail(key).title}]);
+    document.title = parseDetail(key).title + ' — OMOX';
+    /* 顶栏常驻返回：滚到文章中间也能直接退，不用先回顶部 */
+    topback.hidden = false;
+    topbackLabel.textContent = '返回 ' + cat.name;
+    topback.setAttribute('data-anchor', 'cat-' + cat.key);
+    document.body.classList.add('reading');   /* 进度条 scroll-driven 只在详情页激活 */
+  } else if (cm && CAT_BY_KEY[cm[1]]) {
+    /* 分类页：页面短，不进 reading —— 不给阅读进度条 */
+    var ck = cm[1], ccat = CAT_BY_KEY[ck];
+    app.innerHTML = catView(ck);
+    crumb.innerHTML = crumbHTML([{href:'#/', label:'个人站点'}, {label:ccat.name}]);
+    document.title = ccat.name + ' — OMOX';
+    topback.hidden = false;
+    topbackLabel.textContent = '返回首页';
+    topback.setAttribute('data-anchor', 'cat-' + ccat.key);
+    document.body.classList.remove('reading');
+  } else {
+    app.innerHTML = homeView();
+    crumb.innerHTML = crumbHTML([{label:'个人站点'}]);
+    document.title = 'OMOX — 个人站点';
+    topback.hidden = true;
+    topback.removeAttribute('data-anchor');
+    document.body.classList.remove('reading');
+  }
+  dropRects();          /* DOM 换了，卡片位置缓存作废 */
+  measureScroll();      /* 页面高度变了，可滚范围重算 */
+  observeRise();
+  updateProgress();
+  requestAnimationFrame(function(){
+    fitAscii();
+    if (location.hash.indexOf('#/#') === 0) {
+      var id = location.hash.slice(3);
+      var el = document.getElementById(id);
+      if (el) { el.scrollIntoView({behavior:'smooth', block:'start'}); location.replace('#/'); return; }
+    }
+    window.scrollTo({top:0, behavior:'auto'});
+  });
+}
+window.addEventListener('hashchange', render);
+
+/* 点分类玻璃板本身 -> 打开该分类页。文章行有自己的 href、返回钮与标签也都是
+   链接，靠 closest('a') 一刀排除，这里只兜“点在板子空白处”这一种情况。 */
+document.addEventListener('click', function(e){
+  if (!e.target || !e.target.closest) return;
+  if (e.target.closest('a')) return;
+  var card = e.target.closest('[data-cat]');
+  if (card) location.hash = '#/c/' + card.getAttribute('data-cat');
+});
+
+/* 行内锚点：点面包屑/返回时先渲染首页再滚到卡片 */
+document.addEventListener('click', function(e){
+  var a = e.target.closest && e.target.closest('a[data-anchor]');
+  if (!a) return;
+  var id = a.getAttribute('data-anchor');
+  if (location.hash !== '#/') { location.hash = '#/'; }
+  e.preventDefault();
+  setTimeout(function(){
+    var el = document.getElementById(id);
+    if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 60);
+});
+
+/* ---------- 交互动画 ----------
+   注：曾加过“视口外卡片关 backdrop 暂停采样”（IO + .far class），A/B/A/B 交替实测
+   6x CPU 节流下 112.2 FPS vs 恒定全开 117.2 FPS —— 滚动时卡片频繁跨界，backdrop
+   状态来回切换的开销 > 省下的采样，净收益为负。已删除，别再加回来。 */
+
+/* 1) 滚动进场：滚进视口才浮起，级联延迟由 --d 控制
+   threshold 必须是 0 —— 详情页动辄上万 px，视口只有几百 px，
+   任何 >0 的 threshold 都算不出相交，元素会永远 opacity:0。
+   另外渲染刚落地的元素要同步判一次：IO 首帧对超高元素的判定不稳，
+   等它回调可能永远等不到，页面就白屏了。 */
+var riseIO = null;
+function observeRise(){
+  var all = document.querySelectorAll('.rise');
+  var vh = window.innerHeight || document.documentElement.clientHeight || 800;
+  var canIO = ('IntersectionObserver' in window);
+  if (canIO) {
+    if (riseIO) riseIO.disconnect();
+    riseIO = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (!en.isIntersecting) return;
+        en.target.classList.add('in');
+        riseIO.unobserve(en.target);
+      });
+    }, {rootMargin:'0px 0px -6% 0px', threshold:0});
+  }
+  Array.prototype.forEach.call(all, function(el){
+    if (el.classList.contains('in')) return;
+    var r = el.getBoundingClientRect();
+    if (r.top < vh * 0.94 && r.bottom > 0) { el.classList.add('in'); return; }  /* 已在视口：立即出 */
+    /* 还在下面：有 IO 就等滚动到再出；没有 IO 又不给 'in'，
+       这张卡会永远 opacity:0 —— 老浏览器滚下去是一片空白。 */
+    if (canIO) riseIO.observe(el); else el.classList.add('in');
+  });
+}
+
+/* 2) 鼠标跟随：玻璃卡打光 + 3D 倾斜 + 背景色团视差（rAF 合帧，passive） */
+var fxFrame = 0, fxEvent = null, lastTilt = null;
+/* 视差变量写在 .bg 上而不是 documentElement：
+   自定义属性是继承的，写在根上会让整棵文档树的 computed style 失效；
+   写在 .bg 上只失效它的 6 个子元素。 */
+var bgEl = document.querySelector('.bg');
+var rectCache = new WeakMap();
+function dropRects(){ rectCache = new WeakMap(); }   /* DOM 换了整表作废 */
+/* rect 缓存必须带 scrollY 校验：滚动会让视口坐标全变，
+   只在 resize/render 失效的话，滚轮一滚缓存就是旧的，
+   打光坐标算出来是负百分比，光斑直接飞到卡片外面。 */
+function rectOf(el){
+  var sy = window.scrollY;
+  var c = rectCache.get(el);
+  if (c && c.y === sy) return c.r;
+  var r = el.getBoundingClientRect();
+  rectCache.set(el, {y: sy, r: r});
+  return r;
+}
+/* 最后一次鼠标位置 + 当前被打光的卡片：滚动时光标没动、
+   浏览器也不会发 mousemove，得靠它俩自己重算。 */
+var lastMouse = {x:0, y:0, has:false};
+var fxScroll = false;
+function resetTilt(el){
+  el.style.removeProperty('--rx');
+  el.style.removeProperty('--ry');
+}
+function runFx(){
+  fxFrame = 0;
+  var fromScroll = fxScroll; fxScroll = false;
+  var cx, cy, card;
+  if (fromScroll) {
+    /* 滚动触发：光标没动，浏览器不发 mousemove。
+       用 elementFromPoint 问"光标现在落在哪张卡上"，坐标用最后那次鼠标位置。 */
+    if (!lastMouse.has) return;
+    cx = lastMouse.x; cy = lastMouse.y;
+    var hit = document.elementFromPoint(cx, cy);
+    card = hit && hit.closest ? hit.closest('.glass') : null;
+  } else {
+    var e2 = fxEvent; if (!e2) return;
+    cx = e2.clientX; cy = e2.clientY;
+    lastMouse.x = cx; lastMouse.y = cy; lastMouse.has = true;
+    /* 背景色团视差只跟鼠标走，滚动时鼠标没动，这一帧就不写 */
+    var nx0 = (cx / window.innerWidth - 0.5) * 2;
+    var ny0 = (cy / window.innerHeight - 0.5) * 2;
+    bgEl.style.setProperty('--px', nx0.toFixed(3));
+    bgEl.style.setProperty('--py', ny0.toFixed(3));
+    var t = e2.target;
+    card = t && t.closest ? t.closest('.glass') : null;
+  }
+  if (!card) {
+    if (lastTilt) { resetTilt(lastTilt); lastTilt = null; }
+    return;
+  }
+  var r = rectOf(card);          /* 带 scrollY 校验，滚过就重取 */
+  if (!r.width || !r.height) return;
+  card.style.setProperty('--mx', ((cx - r.left) / r.width * 100).toFixed(1) + '%');
+  card.style.setProperty('--my', ((cy - r.top) / r.height * 100).toFixed(1) + '%');
+  /* 详情页整篇长文不倾斜（读字时画面晃会晕），只给首页卡片和 hero 加 */
+  if (card.classList.contains('detail')) {
+    if (lastTilt && lastTilt !== card) resetTilt(lastTilt);
+    if (lastTilt === card) resetTilt(card);
+    lastTilt = null;
+    return;
+  }
+  var nx = (cx - r.left) / r.width - 0.5;
+  var ny = (cy - r.top) / r.height - 0.5;
+  card.style.setProperty('--ry', (nx * 6.5).toFixed(2) + 'deg');   /* 左右 */
+  card.style.setProperty('--rx', (-ny * 6.5).toFixed(2) + 'deg');  /* 上下 */
+  if (lastTilt && lastTilt !== card) resetTilt(lastTilt);
+  lastTilt = card;
+}
+function scheduleFx(){
+  if (fxFrame) return;
+  fxFrame = requestAnimationFrame(runFx);
+}
+document.addEventListener('mousemove', function(e){
+  fxEvent = e;
+  fxScroll = false;
+  scheduleFx();
+}, {passive:true});
+/* 滚动也排一帧：光标没动也要跟着卡片重新定位 */
+window.addEventListener('scroll', function(){
+  if (!lastMouse.has) return;
+  fxScroll = true;
+  scheduleFx();
+}, {passive:true});
+
+/* 3) 阅读进度条 + 回顶按钮：都只在滚动时更新 */
+var progressEl = document.getElementById('progress');
+/* 浏览器支持 scroll-driven 动画时进度条交给 CSS（合成器线程），JS 不再写 width：
+   @supports 分支里 width 已锁 100%、由 transform 驱动，两套不会打架。 */
+var cssScrollDriven = !!(window.CSS && CSS.supports && CSS.supports('animation-timeline','scroll()'));
+var scrollRange = -1, lastPct = -1, lastTotop = null;
+function measureScroll(){
+  if (cssScrollDriven) return;   /* 进度条交给 CSS 了，scrollRange/lastPct 没人消费 */
+  scrollRange = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  lastPct = -1;
+}
+function updateProgress(){
+  if (progressEl && !cssScrollDriven) {   /* 支持 scroll-driven 就整段跳过，totop 不受影响 */
+    if (!/^#\/p\//.test(location.hash)) {
+      if (lastPct !== -2) { progressEl.style.opacity = '0'; progressEl.style.width = '0%'; lastPct = -2; }
+    } else {
+      if (scrollRange < 0) measureScroll();
+      var p = scrollRange > 8 ? Math.min(1, Math.max(0, window.scrollY / scrollRange)) : 0;
+      var pct = Math.round(p * 1000) / 10;
+      if (pct !== lastPct) { progressEl.style.opacity = '1'; progressEl.style.width = pct + '%'; lastPct = pct; }
+    }
+  }
+  /* 只在跨过阈值那一刻动 DOM，而不是每个 scroll 事件都 toggle */
+  if (totop) {
+    var on = window.scrollY > 560;
+    if (on !== lastTotop) { totop.classList.toggle('on', on); lastTotop = on; }
+  }
+}
+window.addEventListener('scroll', updateProgress, {passive:true});
+window.addEventListener('resize', function(){
+  dropRects(); measureScroll(); updateProgress(); fitAscii();
+}, {passive:true});
+if (totop) totop.addEventListener('click', function(){
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+/* 4) ASCII 自适应：按容器宽度反算字号，任何预览宽度都显示完整，
+   不再靠横向滚动去够被切掉的半截。 */
+function fitAscii(){
+  var wrap = document.querySelector('.banner-wrap');
+  var pre = document.querySelector('.ascii');
+  if (!wrap || !pre || wrap.offsetParent === null) return;   /* 移动端已切 OCR，跳过 */
+  pre.style.fontSize = '';                                    /* 先复位到 CSS 基准再量 */
+  var avail = wrap.clientWidth - 44;                          /* 左右 padding 22*2 */
+  var need = pre.scrollWidth;
+  if (avail > 40 && need > avail) {
+    var base = parseFloat(getComputedStyle(pre).fontSize);
+    pre.style.fontSize = Math.max(5, Math.floor(base * avail / need)) + 'px';
+  }
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitAscii);
+/* 容器一变宽就重算字号。只挂 window.resize 不够：iframe 内嵌、开发者工具模拟视口、
+   移动端地址栏收起这些场景下元素宽度变了却不派发 resize，ASCII 会停在旧字号上溢出。
+   ResizeObserver 直接盯 #app 的宽度（高度变化跳过，避免每次 render 都白算）。 */
+if (window.ResizeObserver) {
+  var lastAppW = -1;
+  new ResizeObserver(function(){
+    var appEl = document.getElementById('app');
+    var w = appEl ? Math.round(appEl.getBoundingClientRect().width) : -1;
+    if (w === lastAppW) return;
+    lastAppW = w;
+    if (w > 0) fitAscii();
+  }).observe(document.getElementById('app'));
+}
+
+/* 出场动画跑完就把 fill:forwards 摘掉。
+   保留的话每个 .stg/.blk 会永久钉在合成层上 —— 详情页 20 多块正文就是 20 多层，
+   动画结束它们已经不需要独立层了。animationend 不冒泡，所以走捕获阶段。 */
+document.addEventListener('animationend', function(e){
+  var el = e.target;
+  if (!el.classList) return;
+  if (!el.classList.contains('stg') && !el.classList.contains('blk')) return;
+  el.style.animation = 'none';
+  el.style.opacity = '1';
+  el.style.transform = 'none';
+}, true);
+
+render();
+</script>
+</body>
+</html>

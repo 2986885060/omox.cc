@@ -1,0 +1,30 @@
+# 背景原图：版权与体积都不入库（构建按 OMOX_BG -> bg_src.jpg -> 本机原路径 找，找不到就沿用已有 bg.webp）
+bg_src.jpg
+*.jpg
+!docs/*.jpg
+
+# 构建中间产物与临时文件
+_subset_chars.txt
+_syntax_check.js
+*.sub
+bg.jpg
+gf.css
+live_tmp.html
+
+# 原站抓取件（第三方文件，不入库）
+omox_home*
+omox_script.js
+omox_style.js
+omox_content.md
+
+# 调试截图（README 用的放在 docs/）
+/*.png
+preview_*.png
+noblur_*.png
+blur4_*.png
+final_*.png
+ship_*.png
+cat_*.png
+clean_*.png
+seq_*.png
+subset_*.png
